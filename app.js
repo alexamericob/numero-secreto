@@ -1,4 +1,5 @@
 // Armazena o número escolhido pelo usuário
+//teste
 let chute;
 let tentativas = 1;
 let numeroMaximoIntervalo;
