@@ -30,7 +30,7 @@ jobs:
       # =========================
       # Define versão do Node para garantir consistência
       - name: Configurar Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
 
@@ -88,7 +88,7 @@ jobs:
       # =========================
       # Envia análise de código para o SonarCloud
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v6
+        uses: SonarSource/sonarcloud-scan-action@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
