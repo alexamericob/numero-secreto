@@ -1,55 +1,42 @@
-name: CI - Code Quality (JavaScript + SonarCloud)
+name: CI - Code Quality (JavaScript) + SonarCloud
 
 on:
-  # Executa em push na branch main
   push:
     branches: ["main"]
-
-  # Executa em Pull Requests para main
   pull_request:
     branches: ["main"]
-
-  # Permite executar manualmente via GitHub Actions
   workflow_dispatch:
 
 jobs:
   quality:
-    name: Quality Pipeline
     runs-on: ubuntu-latest
 
+    # Permissões mínimas; PR write ajuda em decoração/anotações quando aplicável
+    permissions:
+      contents: read
+      pull-requests: write
+
     steps:
-      # =========================
-      # 1️⃣ Checkout do código
-      # =========================
-      # Faz o clone do repositório no runner do GitHub
+      # 1) Baixa o código do seu repositório para o runner do GitHub
       - name: Checkout do código
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # importante para o Sonar ter histórico/branch melhor
 
-      # =========================
-      # 2️⃣ Configurar  Node.js
-      # =========================
-      # Define versão do Node para garantir consistência
+      # 2) Configura a versão do Node.js usada no runner
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # =========================
-      # 3️⃣ Preparar ambiente de lint
-      # =========================
-      # Inicializa package.json (caso não exista)
-      # Instala ESLint com suporte ao Flat Config
+      # 3) Prepara um ambiente mínimo para rodar ESLint (sem exigir package.json do projeto)
       - name: Preparar ambiente de lint (ESLint)
         run: |
           npm init -y
           npm install --save-dev eslint @eslint/js
 
-      # =========================
-      # 4️⃣ Criar configuração ESLint (Flat Config)
-      # =========================
-      # Configura:
-      # - Ambiente browser (alert, prompt, console)
-      # - Regras recomendadas
+      # 4) Cria a configuração no novo padrão do ESLint (Flat Config)
+      #    - Também habilita o ambiente "browser" para evitar erros com prompt/alert/console
       - name: Criar configuração do ESLint (Flat Config)
         run: |
           cat > eslint.config.js << 'EOF'
@@ -62,6 +49,9 @@ jobs:
                 ecmaVersion: "latest",
                 sourceType: "script",
                 globals: {
+                  // Browser globals
+                  window: "readonly",
+                  document: "readonly",
                   alert: "readonly",
                   prompt: "readonly",
                   console: "readonly"
@@ -75,36 +65,30 @@ jobs:
           ];
           EOF
 
-      # =========================
-      # 5️⃣ Rodar ESLint
-      # =========================
-      # Se houver erros, o job falha aqui
+      # 5) Executa o ESLint em todos os arquivos JS (falha o job se encontrar erros)
       - name: Rodar ESLint nos arquivos JavaScript
         run: |
           npx eslint "**/*.js"
 
-      # =========================
-      # 6️⃣ SonarCloud Scan
-      # =========================
-      # Envia análise de código para o SonarCloud
+      # 6) Executa o scan do SonarCloud (action correta e atual)
+      #    - IMPORTANTE: desative o "Automatic Analysis" no SonarCloud para não dar conflito
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: >
+            -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.organization=alexamericob
             -Dsonar.projectKey=alexamericob_numero-secreto
             -Dsonar.sources=.
 
-      # =========================
-      # 7️⃣ Quality Gate (🔥 PASSO CRÍTICO 🔥)
-      # =========================
-      # Aguarda o resultado do Quality Gate
-      # FALHA a pipeline se o Sonar reprovar
-      - name: SonarCloud Quality Gate
+      # 7) (O pulo do gato) Espera o Quality Gate e FALHA a pipeline se estiver "Failed"
+      - name: SonarCloud Quality Gate (fail pipeline if failed)
         uses: SonarSource/sonarqube-quality-gate-action@v1
         timeout-minutes: 5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          scanMetadataReportFile: .scannerwork/report-task.txt
