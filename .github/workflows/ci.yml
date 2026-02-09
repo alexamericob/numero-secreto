@@ -38,34 +38,58 @@ jobs:
           npm init -y
           npm install --save-dev eslint @eslint/js
 
-      # Step 4 - Cria a configuração do ESLint no formato "Flat Config" (obrigatório no ESLint v9+)
-      # Importante: este arquivo é JavaScript, então comentários devem ser // ou /* */
+      # Step 4 - Cria a configuração do ESLint no formato "Flat Config" (ESLint v9+)
+      # Aqui ajustamos corretamente: arquivos do projeto rodam no browser; o config roda em Node.
       - name: Criar configuração do ESLint (Flat Config)
         run: |
           cat > eslint.config.js << 'EOF'
           const js = require("@eslint/js");
 
           module.exports = [
-            // Conjunto de regras recomendadas padrão do ESLint
-            js.configs.recommended,
-
+            // ============================
+            // Regras para arquivos do projeto (Browser)
+            // ============================
             {
-              // Configurações da linguagem JavaScript
-              languageOptions: {
-                // Usa a versão mais recente do ECMAScript
-                ecmaVersion: "latest",
+              files: ["**/*.js"],
+              ignores: ["eslint.config.js"],
 
-                // Código executado no browser (script, não module)
-                sourceType: "script"
+              languageOptions: {
+                ecmaVersion: "latest",
+                sourceType: "script",
+
+                // Globais típicas do browser
+                globals: {
+                  window: "readonly",
+                  document: "readonly",
+                  alert: "readonly",
+                  prompt: "readonly",
+                  console: "readonly"
+                }
               },
 
-              // Regras customizadas de qualidade de código
               rules: {
                 // Variáveis não utilizadas geram warning (não quebram o pipeline)
                 "no-unused-vars": "warn",
 
                 // Variáveis não declaradas geram erro (quebram o pipeline)
                 "no-undef": "error"
+              }
+            },
+
+            // ============================
+            // Regras para o arquivo de configuração (Node.js)
+            // ============================
+            {
+              files: ["eslint.config.js"],
+              languageOptions: {
+                ecmaVersion: "latest",
+                sourceType: "script",
+
+                // Globais típicas do Node.js
+                globals: {
+                  require: "readonly",
+                  module: "readonly"
+                }
               }
             }
           ];
