@@ -1,130 +1,110 @@
-# Nome do workflow que aparecerá na aba "Actions" do GitHub
-name: CI - Code Quality (JavaScript)
+name: CI - Code Quality (JavaScript + SonarCloud)
 
-# Eventos que disparam a execução do pipeline
 on:
-  # Executa quando houver push para a branch main
+  # Executa em push na branch main
   push:
     branches: ["main"]
 
-  # Executa quando houver Pull Request direcionado para a branch main
+  # Executa em Pull Requests para main
   pull_request:
     branches: ["main"]
 
-  # Permite executar o pipeline manualmente pelo botão "Run workflow"
+  # Permite executar manualmente via GitHub Actions
   workflow_dispatch:
 
 jobs:
-  # Job responsável por validações de qualidade (lint)
   quality:
-    # Runner utilizado para executar o job
+    name: Quality Pipeline
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1 - Faz checkout do código (traz os arquivos do repo para o runner)
+      # =========================
+      # 1️⃣ Checkout do código
+      # =========================
+      # Faz o clone do repositório no runner do GitHub
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # Step 2 - Configura Node.js para rodar npm/npx e ferramentas JS
+      # =========================
+      # 2️⃣ Configurar Node.js
+      # =========================
+      # Define versão do Node para garantir consistência
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # Step 3 - Prepara ambiente para lint (cria package.json temporário e instala ESLint)
-      # Obs: Como seu projeto é HTML/CSS/JS puro (sem package.json), fazemos isso no CI.
+      # =========================
+      # 3️⃣ Preparar ambiente de lint
+      # =========================
+      # Inicializa package.json (caso não exista)
+      # Instala ESLint com suporte ao Flat Config
       - name: Preparar ambiente de lint (ESLint)
         run: |
           npm init -y
           npm install --save-dev eslint @eslint/js
 
-      # Step 4 - Cria a configuração do ESLint no formato "Flat Config" (ESLint v9+)
-      # Aqui ajustamos corretamente: arquivos do projeto rodam no browser; o config roda em Node.
+      # =========================
+      # 4️⃣ Criar configuração ESLint (Flat Config)
+      # =========================
+      # Configura:
+      # - Ambiente browser (alert, prompt, console)
+      # - Regras recomendadas
       - name: Criar configuração do ESLint (Flat Config)
         run: |
           cat > eslint.config.js << 'EOF'
           const js = require("@eslint/js");
 
           module.exports = [
-            // ============================
-            // Regras para arquivos do projeto (Browser)
-            // ============================
+            js.configs.recommended,
             {
-              files: ["**/*.js"],
-              ignores: ["eslint.config.js"],
-
               languageOptions: {
                 ecmaVersion: "latest",
                 sourceType: "script",
-
-                // Globais típicas do browser
                 globals: {
-                  window: "readonly",
-                  document: "readonly",
                   alert: "readonly",
                   prompt: "readonly",
                   console: "readonly"
                 }
               },
-
               rules: {
-                // Variáveis não utilizadas geram warning (não quebram o pipeline)
                 "no-unused-vars": "warn",
-
-                // Variáveis não declaradas geram erro (quebram o pipeline)
                 "no-undef": "error"
-              }
-            },
-
-            // ============================
-            // Regras para o arquivo de configuração (Node.js)
-            // ============================
-            {
-              files: ["eslint.config.js"],
-              languageOptions: {
-                ecmaVersion: "latest",
-                sourceType: "script",
-
-                // Globais típicas do Node.js
-                globals: {
-                  require: "readonly",
-                  module: "readonly"
-                }
               }
             }
           ];
           EOF
 
-      # Step 5 - Executa o ESLint em todos os arquivos JavaScript do repositório
-      # Se houver erro (ex: no-undef), o pipeline falha automaticamente
+      # =========================
+      # 5️⃣ Rodar ESLint
+      # =========================
+      # Se houver erros, o job falha aqui
       - name: Rodar ESLint nos arquivos JavaScript
         run: |
           npx eslint "**/*.js"
 
-  # =========================
-  # JOB 2 - Análise SonarCloud
-  # =========================
-  sonarcloud:
-    name: SonarCloud Analysis
-    runs-on: ubuntu-latest
-
-    # Só roda se o job de qualidade passar
-    needs: quality
-
-    steps:
-      # Checkout completo (necessário para histórico)
-      - name: Checkout do código
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      # Executa a análise no SonarCloud
+      # =========================
+      # 6️⃣ SonarCloud Scan
+      # =========================
+      # Envia análise de código para o SonarCloud
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v6
+        uses: SonarSource/sonarcloud-github-action@v6
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >
             -Dsonar.organization=alexamericob
             -Dsonar.projectKey=alexamericob_numero-secreto
             -Dsonar.sources=.
+
+      # =========================
+      # 7️⃣ Quality Gate (🔥 PASSO CRÍTICO 🔥)
+      # =========================
+      # Aguarda o resultado do Quality Gate
+      # FALHA a pipeline se o Sonar reprovar
+      - name: SonarCloud Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
