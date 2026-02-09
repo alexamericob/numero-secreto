@@ -11,45 +11,49 @@ jobs:
   quality:
     runs-on: ubuntu-latest
 
-    # Permissões mínimas; PR write ajuda em decoração/anotações quando aplicável
-    permissions:
-      contents: read
-      pull-requests: write
-
     steps:
-      # 1) Baixa o código do seu repositório para o runner do GitHub
+      # 1) Faz checkout do repositório para o runner (pega o código do GitHub)
       - name: Checkout do código
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # importante para o Sonar ter histórico/branch melhor
 
-      # 2) Configura a versão do Node.js usada no runner
+      # 2) Prepara o Node.js para executar npm/npx (ambiente de build/lint)
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      # 3) Prepara um ambiente mínimo para rodar ESLint (sem exigir package.json do projeto)
+      # 3) (Opcional) Garante um package.json e instala ESLint + preset @eslint/js
+      #    Observação: ideal mesmo é você versionar um package.json com eslint no repo,
+      #    mas aqui mantemos seu modelo atual (tudo gerado no CI).
       - name: Preparar ambiente de lint (ESLint)
         run: |
           npm init -y
           npm install --save-dev eslint @eslint/js
 
-      # 4) Cria a configuração no novo padrão do ESLint (Flat Config)
-      #    - Também habilita o ambiente "browser" para evitar erros com prompt/alert/console
-      - name: Criar configuração do ESLint (Flat Config)
+      # 4) Cria o arquivo de configuração do ESLint (Flat Config) já corrigido:
+      #    - Config browser para os arquivos da aplicação (alert/prompt/console/etc.)
+      #    - Config Node apenas para eslint.config.js (require/module)
+      - name: Criar configuração do ESLint (Flat Config) - corrigida (browser + node)
         run: |
           cat > eslint.config.js << 'EOF'
           const js = require("@eslint/js");
 
           module.exports = [
+            // ===============================
+            // Configuração padrão recomendada
+            // ===============================
             js.configs.recommended,
+
+            // =========================================
+            // Configuração para arquivos da aplicação
+            // (browser: alert, prompt, console, etc.)
+            // =========================================
             {
+              files: ["**/*.js"],
               languageOptions: {
                 ecmaVersion: "latest",
                 sourceType: "script",
                 globals: {
-                  // Browser globals
                   window: "readonly",
                   document: "readonly",
                   alert: "readonly",
@@ -61,33 +65,47 @@ jobs:
                 "no-unused-vars": "warn",
                 "no-undef": "error"
               }
+            },
+
+            // =========================================
+            // Configuração específica para arquivos Node
+            // (eslint.config.js)
+            // =========================================
+            {
+              files: ["eslint.config.js"],
+              languageOptions: {
+                sourceType: "commonjs",
+                globals: {
+                  require: "readonly",
+                  module: "readonly"
+                }
+              }
             }
           ];
           EOF
 
-      # 5) Executa o ESLint em todos os arquivos JS (falha o job se encontrar erros)
+      # 5) Roda o ESLint no repositório
       - name: Rodar ESLint nos arquivos JavaScript
         run: |
           npx eslint "**/*.js"
 
-      # 6) Executa o scan do SonarCloud (action correta e atual)
-      #    - IMPORTANTE: desative o "Automatic Analysis" no SonarCloud para não dar conflito
+      # 6) Executa o scan do SonarCloud (precisa do SONAR_TOKEN nos Secrets do repo)
+      #    Secrets esperados:
+      #    - SONAR_TOKEN: token gerado no SonarCloud
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v6
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: >
-            -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.organization=alexamericob
             -Dsonar.projectKey=alexamericob_numero-secreto
             -Dsonar.sources=.
 
-      # 7) (O pulo do gato) Espera o Quality Gate e FALHA a pipeline se estiver "Failed"
-      - name: SonarCloud Quality Gate (fail pipeline if failed)
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        timeout-minutes: 5
+      # 7) (Recomendado) Aguarda o Quality Gate e falha a pipeline se não passar
+      #    Isso garante “quality gate obrigatório” (pipeline para se falhar no Sonar).
+      - name: SonarCloud Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
