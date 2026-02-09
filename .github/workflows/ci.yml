@@ -15,68 +15,63 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Nome do job (pode existir mais de um job em um workflow)
+  # Job responsável por validações de qualidade (lint)
   quality:
-    # Define o ambiente onde o job será executado
-    # ubuntu-latest é o padrão mais usado em pipelines CI
+    # Runner utilizado para executar o job
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1 - Faz o checkout do código do repositório
-      # Sem isso, o runner não teria acesso aos arquivos do projeto
+      # Step 1 - Faz checkout do código (traz os arquivos do repo para o runner)
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # Step 2 - Configura o ambiente Node.js
-      # Necessário para executar npm, npx e ferramentas JavaScript
+      # Step 2 - Configura Node.js para rodar npm/npx e ferramentas JS
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          # Versão do Node.js usada no pipeline
           node-version: "20"
 
-      # Step 3 - Prepara o ambiente de lint
-      # Inicializa um package.json (caso o projeto não tenha)
-      # e instala o ESLint e as regras base do JavaScript
+      # Step 3 - Prepara ambiente para lint (cria package.json temporário e instala ESLint)
+      # Obs: Como seu projeto é HTML/CSS/JS puro (sem package.json), fazemos isso no CI.
       - name: Preparar ambiente de lint (ESLint)
         run: |
           npm init -y
           npm install --save-dev eslint @eslint/js
 
-      # Step 4 - Cria o arquivo de configuração do ESLint
-      # Utiliza o novo padrão "Flat Config" (eslint.config.js),
-      # obrigatório a partir do ESLint v9+
+      # Step 4 - Cria a configuração do ESLint no formato "Flat Config" (obrigatório no ESLint v9+)
+      # Importante: este arquivo é JavaScript, então comentários devem ser // ou /* */
       - name: Criar configuração do ESLint (Flat Config)
         run: |
           cat > eslint.config.js << 'EOF'
           const js = require("@eslint/js");
 
           module.exports = [
-            # Regras recomendadas padrão do ESLint
+            // Conjunto de regras recomendadas padrão do ESLint
             js.configs.recommended,
+
             {
-              # Configurações da linguagem JavaScript
+              // Configurações da linguagem JavaScript
               languageOptions: {
-                # Usa a versão mais recente do ECMAScript
+                // Usa a versão mais recente do ECMAScript
                 ecmaVersion: "latest",
 
-                # Define que o código roda no browser (scripts)
+                // Código executado no browser (script, não module)
                 sourceType: "script"
               },
 
-              # Regras customizadas de qualidade de código
+              // Regras customizadas de qualidade de código
               rules: {
-                # Variáveis não utilizadas geram warning, mas não quebram o build
+                // Variáveis não utilizadas geram warning (não quebram o pipeline)
                 "no-unused-vars": "warn",
 
-                # Variáveis não declaradas quebram o pipeline (erro)
+                // Variáveis não declaradas geram erro (quebram o pipeline)
                 "no-undef": "error"
               }
             }
           ];
           EOF
 
-      # Step 5 - Executa o ESLint em todos os arquivos JavaScript do projeto
+      # Step 5 - Executa o ESLint em todos os arquivos JavaScript do repositório
       # Se houver erro (ex: no-undef), o pipeline falha automaticamente
       - name: Rodar ESLint nos arquivos JavaScript
         run: |
