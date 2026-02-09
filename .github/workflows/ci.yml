@@ -30,7 +30,7 @@ jobs:
       # =========================
       # Define versão do Node para garantir consistência
       - name: Configurar Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
