@@ -1,0 +1,91 @@
+# Nome do workflow que aparece na aba "Actions" do GitHub
+name: CI - Code Quality (JavaScript)
+
+# Define QUANDO o pipeline será executado
+on:
+  # Executa sempre que houver push na branch main
+  push:
+    branches: ["main"]
+
+  # Executa também em Pull Requests abertos para a branch main
+  pull_request:
+    branches: ["main"]
+
+  # Permite executar o pipeline manualmente pela interface do GitHub
+  workflow_dispatch:
+
+# Define os jobs do pipeline
+jobs:
+  # Nome do job (pode ser qualquer nome, aqui usamos "quality")
+  quality:
+    # Define o sistema operacional do runner
+    # ubuntu-latest é o mais comum e rápido
+    runs-on: ubuntu-latest
+
+    # Lista de etapas (steps) que o job vai executar em ordem
+    steps:
+      # PASSO 1: Checkout do código-fonte
+      # Faz o clone do repositório dentro do runner
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # PASSO 2: Configurar Node.js
+      # Necessário para rodar ferramentas JavaScript (npm, eslint)
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          # Define a versão do Node.js usada no pipeline
+          # Node 20 é LTS e amplamente usado em projetos modernos
+          node-version: "20"
+
+      # PASSO 3: Preparar o ambiente para lint
+      # Como o projeto não tem package.json, criamos um temporário
+      # Somente para execução do ESLint no CI
+      - name: Preparar ambiente de lint (ESLint)
+        run: |
+          # Inicializa um package.json padrão
+          npm init -y
+
+          # Instala o ESLint como dependência de desenvolvimento
+          npm install --save-dev eslint
+
+      # PASSO 4: Criar configuração do ESLint
+      # Define regras adequadas para JavaScript executado no navegador
+      - name: Criar configuração do ESLint (projeto browser)
+        run: |
+          # Cria o arquivo .eslintrc.json dinamicamente no pipeline
+          cat > .eslintrc.json << 'EOF'
+          {
+            # Indica que o código roda no browser (window, alert, prompt, etc.)
+            "env": { 
+              "browser": true, 
+              "es2021": true 
+            },
+
+            # Usa as regras recomendadas pelo ESLint
+            "extends": ["eslint:recommended"],
+
+            # Configura a versão do JavaScript e o tipo de script
+            # "script" é ideal para JS carregado via <script>
+            "parserOptions": { 
+              "ecmaVersion": "latest", 
+              "sourceType": "script" 
+            },
+
+            # Regras customizadas
+            "rules": {
+              # Variáveis não utilizadas geram apenas WARNING (não quebra o build)
+              "no-unused-vars": "warn",
+
+              # Variáveis não definidas geram ERRO (quebra o pipeline)
+              "no-undef": "error"
+            }
+          }
+          EOF
+
+      # PASSO 5: Executar o ESLint
+      # Analisa todos os arquivos .js do projeto
+      # Se houver erro (ex: variável não definida), o pipeline falha
+      - name: Rodar ESLint nos arquivos JavaScript
+        run: |
+          npx eslint "**/*.js"
