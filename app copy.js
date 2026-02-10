@@ -1,4 +1,4 @@
-let numeroSecreto = parseInt(Math.random() *100 + 2);
+let numeroSecreto = parseInt(Math.random() *100 + 1);
 // Armazena o número escolhido pelo usuário
 let chute;
 let tentativas = 1;
