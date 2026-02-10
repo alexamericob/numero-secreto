@@ -106,7 +106,7 @@ jobs:
       #    Isso garante “quality gate obrigatório” (pipeline para se falhar no Sonar).
       - name: SonarCloud Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1.1.0
-        continue-on-error: true
+      #  continue-on-error: true
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
